@@ -1,197 +1,180 @@
-var chai = require('chai');
-var sinon = require('sinon');
-var sinonChai = require('sinon-chai');
+const redirect = require('../index');
 
-chai.use(sinonChai);
-var { expect } = chai;
-var rewrite = require('../index');
+describe('redirect tests', () => {
+  let redirectFunc;
+  let req;
+  let res;
+  let next;
 
-describe('rewrite tests', function () {
-  var rewriteFunc;
-  var req;
-  var res;
-  var next;
-
-  beforeEach(function () {
+  beforeEach(() => {
     req = {
       url: '/',
       params: {},
       query: {}
     };
-    res = {};
-    next = sinon.fake();
+    res = {
+      redirect: jest.fn(),
+    };
+    next = jest.fn();
   });
 
-  afterEach(function () {
-    sinon.restore();
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
-  function testNegativeCase(rewriteFunc, req, res, next) {
+  function testNegativeCase(redirectFunc, req, res, next) {
     req.url = '/otherPath';
 
-    rewriteFunc(req, res, next);
+    redirectFunc(req, res, next);
 
-    expect(req.url).to.equal('/otherPath');
-    expect(next).to.have.been.calledWith();
+    expect(res.redirect).not.toHaveBeenCalled();
   }
 
-  describe('rewriting using a regular expression', function () {
-    beforeEach(function () {
-      rewriteFunc = rewrite(/^\/i(\w+)/, '/items/$1');
+  describe('redirecting using a regular expression', () => {
+    beforeEach(() => {
+      redirectFunc = redirect(/^\/i(\w+)/, '/items/$1');
     });
 
-    it('rewrites if path matches', function () {
+    it('redirects if path matches', () => {
       req.url = '/i123';
 
-      rewriteFunc(req, res, next);
+      redirectFunc(req, res, next);
 
-      expect(req.url).to.equal('/items/123');
-      expect(next).to.have.been.calledWith();
+      expect(res.redirect).toHaveBeenCalledWith('/items/123');
     });
 
-    it('does not rewrite if path does not match', function () {
-      testNegativeCase(rewriteFunc, req, res, next);
+    it('does not redirect if path does not match', () => {
+      testNegativeCase(redirectFunc, req, res, next);
     });
   });
 
-  describe('rewriting using route parameters (capture group)', function () {
-    beforeEach(function () {
-      rewriteFunc = rewrite('/:src..:dst', '/commits/$1/to/$2');
+  describe('redirecting with a status code', () => {
+    beforeEach(() => {
+      redirectFunc = redirect('/foo', '/bar', 301);
     });
 
-    it('rewrites if path matches', function () {
+    it('redirects if path matches', () => {
+      req.url = '/foo';
+      redirectFunc(req, res, next);
+
+      expect(res.redirect).toHaveBeenCalledWith(301, '/bar');
+    });
+
+    it('does not redirect if path does not match', () => {
+      testNegativeCase(redirectFunc, req, res, next);
+    });
+  });
+
+  describe('redirecting using route parameters (capture group)', () => {
+    beforeEach(() => {
+      redirectFunc = redirect('/:src..:dst', '/commits/$1/to/$2');
+    });
+
+    it('redirects if path matches', () => {
       req.url = '/foo..bar';
 
-      rewriteFunc(req, res, next);
+      redirectFunc(req, res, next);
 
-      expect(req.url).to.equal('/commits/foo/to/bar');
-      expect(next).to.have.been.calledWith();
+      expect(res.redirect).toHaveBeenCalledWith('/commits/foo/to/bar');
     });
 
-    it('does not rewrite if path does not match', function () {
-      testNegativeCase(rewriteFunc, req, res, next);
+    it('does not redirect if path does not match', () => {
+      testNegativeCase(redirectFunc, req, res, next);
     });
   });
 
-  describe('rewriting using route parameters (capture group)', function () {
-    beforeEach(function () {
-      rewriteFunc = rewrite('/:src..:dst', '/commits/:src/to/:dst');
+  describe('redirecting using route parameters (named parameters)', () => {
+    beforeEach(() => {
+      redirectFunc = redirect('/:src..:dst', '/commits/:src/to/:dst');
     });
 
-    it('rewrites if path matches', function () {
+    it('redirects if path matches', () => {
       req.url = '/foo..bar';
 
-      rewriteFunc(req, res, next);
+      redirectFunc(req, res, next);
 
-      expect(req.url).to.equal('/commits/foo/to/bar');
-      expect(next).to.have.been.calledWith();
+      expect(res.redirect).toHaveBeenCalledWith('/commits/foo/to/bar');
     });
 
-
-    it('does not rewrite if path does not match', function () {
-      testNegativeCase(rewriteFunc, req, res, next);
+    it('does not redirect if path does not match', () => {
+      testNegativeCase(redirectFunc, req, res, next);
     });
   });
 
-  describe('rewriting using route parameters (named parameters)', function () {
-    beforeEach(function () {
-      rewriteFunc = rewrite('/:src..:dst', '/commits/:src/to/:dst');
+  describe('using the wildcard * to soak up several segments', () => {
+    beforeEach(() => {
+      redirectFunc = redirect('/js/*', '/public/assets/js/$1');
     });
 
-    it('rewrites if path matches', function () {
-      req.url = '/foo..bar';
-
-      rewriteFunc(req, res, next);
-
-      expect(req.url).to.equal('/commits/foo/to/bar');
-      expect(next).to.have.been.calledWith();
-    });
-
-    it('does not rewrite if path does not match', function () {
-      testNegativeCase(rewriteFunc, req, res, next);
-    });
-  });
-
-  describe('using the wildcard * to soak up several segments', function () {
-    beforeEach(function () {
-      rewriteFunc = rewrite('/js/*', '/public/assets/js/$1');
-    });
-
-    it('rewrites if path matches', function () {
+    it('redirects if path matches', () => {
       req.url = '/js/vendor/jquery.js';
 
-      rewriteFunc(req, res, next);
+      redirectFunc(req, res, next);
 
-      expect(req.url).to.equal('/public/assets/js/vendor/jquery.js');
-      expect(next).to.have.been.calledWith();
+      expect(res.redirect).toHaveBeenCalledWith('/public/assets/js/vendor/jquery.js');
     });
 
-    it('does not rewrite if path does not match', function () {
-      testNegativeCase(rewriteFunc, req, res, next);
+    it('does not redirect if path does not match', () => {
+      testNegativeCase(redirectFunc, req, res, next);
     });
   });
 
-  describe('rewriting the url using the original query string', function () {
-    beforeEach(function () {
-      rewriteFunc = rewrite('/file\\?param=:param', '/file/:param');
+  describe('redirecting the url using the original query string', () => {
+    beforeEach(() => {
+      redirectFunc = redirect('/file\\?param=:param', '/file/:param');
     });
 
-    it('rewrites if path matches', function () {
+    it('redirects if path matches', () => {
       req.url = '/file?param=file1';
 
-      rewriteFunc(req, res, next);
+      redirectFunc(req, res, next);
 
-      expect(req.url).to.equal('/file/file1');
-      expect(next).to.have.been.calledWith();
+      expect(res.redirect).toHaveBeenCalledWith('/file/file1');
     });
 
-    it('does not rewrite if path does not match', function () {
-      testNegativeCase(rewriteFunc, req, res, next);
+    it('does not redirect if path does not match', () => {
+      testNegativeCase(redirectFunc, req, res, next);
     });
   });
 
-  describe('adding query parameters to the query object output', function () {
+  describe('adding query parameters to the query object output', () => {
     beforeEach(() => {
-      rewriteFunc = rewrite('/path', '/anotherpath?param=some');
+      redirectFunc = redirect('/path', '/anotherpath?param=some');
     });
 
     it('adds to query parameters if path matches', () => {
       req.url = '/path';
 
-      rewriteFunc(req, res, next);
+      redirectFunc(req, res, next);
 
-      expect(req.url).to.equal('/anotherpath?param=some');
-      expect(req.query).to.deep.equal({ param: 'some' });
-      expect(next).to.have.been.calledWith();
+      expect(res.redirect).toHaveBeenCalledWith('/anotherpath?param=some');
     });
 
     it('does not add to query parameters if path does not match', () => {
-      testNegativeCase(rewriteFunc, req, res, next);
-      expect(req.query).to.deep.equal({});
+      testNegativeCase(redirectFunc, req, res, next);
+      expect(req.query).toEqual({});
     });
   });
 
-  it('can be used with route middleware (capture group)', function () {
-    rewriteFunc = rewrite('/rewritten/$1');
+  it('can be used with route middleware (capture group)', () => {
+    redirectFunc = redirect('/rewritten/$1');
 
     req.url = '/route/route1';
     req.params = ['', 'route1'];
 
-    rewriteFunc(req, res, next);
+    redirectFunc(req, res, next);
 
-    expect(req.url).to.equal('/rewritten/route1');
-    expect(next).to.have.been.calledWith('route');
+    expect(res.redirect).toHaveBeenCalledWith('/rewritten/route1');
   });
 
-  it('can be used with route middleware (named parameters)', function () {
-    rewriteFunc = rewrite('/rewritten/:var');
+  it('can be used with route middleware (named parameters)', () => {
+    redirectFunc = redirect('/rewritten/:var');
 
     req.url = '/route/route1';
     req.params = { var: 'route1' };
 
-    rewriteFunc(req, res, next);
+    redirectFunc(req, res, next);
 
-    expect(req.url).to.equal('/rewritten/route1');
-    expect(next).to.have.been.calledWith('route');
+    expect(res.redirect).toHaveBeenCalledWith('/rewritten/route1');
   });
 });

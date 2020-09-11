@@ -1,82 +1,68 @@
+const debug = require('debug')('express-urlredirect');
+const { pathToRegexp, parse } = require('path-to-regexp');
+const URL = require('url');
+
+module.exports = redirect;
 
 /**
- * Module dependencies.
- */
-
- var debug = require('debug')('express-urlrewrite');
- var toRegexp = require('path-to-regexp');
- var URL = require('url');
-
-/**
- * Expose `expose`.
- */
-
-module.exports = rewrite;
-
-/**
- * Rewrite `src` to `dst`.
+ * Redirect `src` to `dst`.
  *
  * @param {String|RegExp} src
  * @param {String} dst
+ * @param {Number} statusCode
  * @return {Function}
  * @api public
  */
 
-function rewrite(src, dst) {
-  var keys = [], re, map;
-
+function redirect(src, dst, statusCode) {
+  let re;
+  let map;
+  const fixedSrc = typeof src === 'string' ? src.replace(/\*$/, '(.*)') : src;
   if (dst) {
-    re = toRegexp(src, keys);
-    map = toMap(keys);
-    debug('rewrite %s -> %s    %s', src, dst, re);
+    re = pathToRegexp(fixedSrc, []);
+    map = parse(fixedSrc).map(entry => entry.name).filter(Boolean);
+    debug(`redirect ${fixedSrc} -> ${dst}`);
   } else {
-    debug('rewrite current route -> %s', src);
+    debug(`redirect current route -> ${fixedSrc}`);
   }
 
   return function(req, res, next) {
-    var orig = req.url;
-    var m;
+    const orig = req.url;
+    let match;
     if (dst) {
-      m = re.exec(orig);
-      if (!m) {
+      match = re.exec(orig);
+      if (!match) {
         return next();
       }
     }
-    req.url = req.originalUrl = (dst || src).replace(/\$(\d+)|(?::(\w+))/g, function(_, n, name) {
+    let newUrl = (dst || src).replace(/\$(\d+)|(?::(\w+))/g, function(
+      _,
+      n,
+      name
+    ) {
       if (name) {
-        if (m) return m[map[name].index + 1];
+        if (match) return match[map.indexOf(name) + 1];
         else return req.params[name];
-      } else if (m) {
-        return m[n];
+      } else if (match) {
+        return match[n];
       } else {
         return req.params[n];
       }
     });
-    debug('rewrite %s -> %s', orig, req.url);
-    if (req.url.indexOf('?') > 0) {
-      req.query = URL.parse(req.url, true).query;
-      debug('rewrite updated new query', req.query);
+    debug(`redirect ${orig} -> ${newUrl}`);
+    let query = {};
+    if (newUrl.indexOf('?') > 0) {
+      query = URL.parse(newUrl, true).query;
+      debug('redirect updated new query', query);
+      newUrl = newUrl.slice(0, newUrl.indexOf('?'));
     }
-    if (dst) next();
-    else next('route');
-  }
-}
-
-/**
- * Turn params array into a map for quick lookup.
- *
- * @param {Array} params
- * @return {Object}
- * @api private
- */
-
-function toMap(params) {
-  var map = {};
-
-  params.forEach(function(param, i) {
-    param.index = i;
-    map[param.name] = param;
-  });
-
-  return map;
+    const newUrlWithQuery = URL.format({
+      pathname: newUrl,
+      query,
+    });
+    if (statusCode) {
+      return res.redirect(statusCode, newUrlWithQuery);
+    }
+    return res.redirect(newUrlWithQuery);
+  };
 }
