@@ -1,4 +1,4 @@
-const redirect = require('../index');
+import redirect from '../';
 
 describe('redirect tests', () => {
   let redirectFunc;
@@ -10,7 +10,7 @@ describe('redirect tests', () => {
     req = {
       url: '/',
       params: {},
-      query: {}
+      query: {},
     };
     res = {
       redirect: jest.fn(),
@@ -29,24 +29,6 @@ describe('redirect tests', () => {
 
     expect(res.redirect).not.toHaveBeenCalled();
   }
-
-  describe('redirecting using a regular expression', () => {
-    beforeEach(() => {
-      redirectFunc = redirect(/^\/i(\w+)/, '/items/$1');
-    });
-
-    it('redirects if path matches', () => {
-      req.url = '/i123';
-
-      redirectFunc(req, res, next);
-
-      expect(res.redirect).toHaveBeenCalledWith('/items/123');
-    });
-
-    it('does not redirect if path does not match', () => {
-      testNegativeCase(redirectFunc, req, res, next);
-    });
-  });
 
   describe('redirecting with a status code', () => {
     beforeEach(() => {

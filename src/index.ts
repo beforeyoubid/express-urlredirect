@@ -1,8 +1,11 @@
-const debug = require('debug')('express-urlredirect');
-const { pathToRegexp, parse } = require('path-to-regexp');
-const URL = require('url');
+import debugFunc from 'debug';
+import * as express from 'express';
+import { pathToRegexp, parse, Path } from 'path-to-regexp';
+import URL from 'url';
 
-module.exports = redirect;
+const debug = debugFunc('express-urlredirect');
+
+type Maybe<T> = T | null | undefined;
 
 /**
  * Redirect `src` to `dst`.
@@ -14,19 +17,22 @@ module.exports = redirect;
  * @api public
  */
 
-function redirect(src, dst, statusCode) {
-  let re;
+export default function redirect(src?: string, dst?: string, statusCode?: number) {
+  let re: RegExp;
   let map;
-  const fixedSrc = typeof src === 'string' ? src.replace(/\*$/, '(.*)') : src;
+  const fixedSrc = src?.replace(/\*$/, '(.*)') ?? '';
   if (dst) {
     re = pathToRegexp(fixedSrc, []);
-    map = parse(fixedSrc).map(entry => entry.name).filter(Boolean);
+    map = parse(fixedSrc)
+      .map(entry => (typeof entry === 'string' ? '' : entry?.name))
+      .filter(Boolean);
+
     debug(`redirect ${fixedSrc} -> ${dst}`);
   } else {
     debug(`redirect current route -> ${fixedSrc}`);
   }
 
-  return function(req, res, next) {
+  return function (req: express.Request, res: express.Response, next: express.NextFunction) {
     const orig = req.url;
     let match;
     if (dst) {
@@ -35,11 +41,7 @@ function redirect(src, dst, statusCode) {
         return next();
       }
     }
-    let newUrl = (dst || src).replace(/\$(\d+)|(?::(\w+))/g, function(
-      _,
-      n,
-      name
-    ) {
+    let newUrl = (dst ?? src ?? '').replace(/\$(\d+)|(?::(\w+))/g, function (_, n, name) {
       if (name) {
         if (match) return match[map.indexOf(name) + 1];
         else return req.params[name];
