@@ -51,6 +51,18 @@ jobs:
           key: node_modules-{{ checksum "yarn.lock" }}
           paths:
             - ~/app/node_modules/
+  build:
+    <<: *defaults
+    steps:
+      - checkout
+      - restore_cache:
+          key: node_modules-{{ checksum "yarn.lock" }}
+      - run: NODE_ENV=development yarn
+      - run: yarn build
+      - save_cache:
+          key: node_modules-{{ checksum "yarn.lock" }}
+          paths:
+            - ~/app/node_modules/
 
 workflows:
   version: 2
@@ -59,3 +71,4 @@ workflows:
       - unit-test
       - lint
       - typescript
+      - build
