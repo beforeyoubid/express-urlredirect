@@ -1,7 +1,7 @@
 {
   "name": "express-urlredirect",
   "description": "URL redirect middleware for express",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Bailey Sheather",
   "repository": {
     "type": "git",
